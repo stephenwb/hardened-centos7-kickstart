@@ -1,11 +1,11 @@
 #!/bin/sh
 # This script was written by Frank Caviggia
-# Last update was 07 Feb 2016
+# Last update was 13 May 2017
 #
 # Script: suplemental.sh (system-hardening)
 # Description: Supplemental Hardening 
-# License: GPLv2
-# Copyright: Frank Caviggia, 2016
+# License: Apache License, Version 2.0
+# Copyright: Frank Caviggia, 2018
 # Author: Frank Caviggia <fcaviggi (at) gmail.com>
 
 ########################################
@@ -22,10 +22,10 @@ cat <<EOF > /etc/pam.d/system-auth-local
 #%PAM-1.0
 auth required pam_env.so
 auth required pam_lastlog.so inactive=35
-auth required pam_faillock.so preauth silent audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
+auth required pam_faillock.so preauth silent audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
 auth sufficient pam_unix.so try_first_pass
-auth [default=die] pam_faillock.so authfail audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
-auth sufficient pam_faillock.so authsucc audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
+auth [default=die] pam_faillock.so authfail audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
+auth sufficient pam_faillock.so authsucc audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
 auth requisite pam_succeed_if.so uid >= 1000 quiet
 auth required pam_deny.so
 
@@ -49,16 +49,17 @@ session [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_
 session required pam_unix.so
 EOF
 ln -sf /etc/pam.d/system-auth-local /etc/pam.d/system-auth
-cp -f /etc/pam.d/system-auth-local /etc/system-auth-ac
+cat /etc/pam.d/system-auth-local > /etc/pam.d/system-auth-ac
+chattr +i /etc/pam.d/system-auth-local
 
 cat <<EOF > /etc/pam.d/password-auth-local
 #%PAM-1.0
 auth required pam_env.so
 auth required pam_lastlog.so inactive=35
-auth required pam_faillock.so preauth silent audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
+auth required pam_faillock.so preauth silent audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
 auth sufficient pam_unix.so try_first_pass
-auth [default=die] pam_faillock.so authfail audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
-auth sufficient pam_faillock.so authsucc audit deny=3 even_deny_root root_unlock_time=900 unlock_time=604800 fail_interval=900
+auth [default=die] pam_faillock.so authfail audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
+auth sufficient pam_faillock.so authsucc audit deny=3 even_deny_root root_unlock_time=900 unlock_time=never fail_interval=900
 auth requisite pam_succeed_if.so uid >= 1000 quiet
 auth required pam_deny.so
 
@@ -82,7 +83,8 @@ session [success=1 default=ignore] pam_succeed_if.so service in crond quiet use_
 session required pam_unix.so
 EOF
 ln -sf /etc/pam.d/password-auth-local /etc/pam.d/password-auth
-cp -f /etc/pam.d/password-auth-local /etc/pam.d/password-auth-ac
+cat /etc/pam.d/password-auth-local > /etc/pam.d/password-auth-ac
+chattr +i /etc/pam.d/password-auth-local
 
 cat <<EOF > /etc/security/pwquality.conf
 # Configuration for systemwide password quality limits
@@ -124,16 +126,16 @@ ocredit = -1
 #
 # The minimum number of required classes of characters for the new
 # password (digits, uppercase, lowercase, others).
-minclass = 3
+minclass = 4
 #
 # The maximum number of allowed consecutive same characters in the new password.
 # The check is disabled if the value is 0.
-maxrepeat = 3
+maxrepeat = 2
 #
 # The maximum number of allowed consecutive characters of the same class in the
 # new password.
 # The check is disabled if the value is 0.
-# maxclassrepeat = 0
+maxclassrepeat = 2
 #
 # Whether to check for the words from the passwd entry GECOS string of the user.
 # The check is enabled if the value is not 0.
@@ -143,6 +145,21 @@ maxrepeat = 3
 # dictpath =
 EOF
 
+## Secured NTP Configuration
+cat <<EOF > /etc/ntp.conf
+# by default act only as a basic NTP client
+restrict -4 default nomodify nopeer noquery notrap
+restrict -6 default nomodify nopeer noquery notrap
+# allow NTP messages from the loopback address, useful for debugging
+restrict 127.0.0.1
+restrict ::1
+# poll server at higher rate to prevent drift
+maxpoll 17
+# server(s) we time sync to
+##server 192.168.0.1
+##server 2001:DB9::1
+#server time.example.net
+EOF
 
 ########################################
 # STIG Audit Configuration
@@ -300,15 +317,22 @@ cat <<EOF > /etc/audit/rules.d/audit.rules
 -a always,exit -F arch=b64 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod
 
 #2.6.2.4.8 Ensure auditd Collects Unauthorized Access Attempts to Files (unsuccessful)
--a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
--a always,exit -F arch=b32 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
--a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
--a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
+-a always,exit -F arch=b32 -S creat -S open -S openat -S open_by_handle_at -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
+-a always,exit -F arch=b32 -S creat -S open -S openat -S open_by_handle_at -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
+-a always,exit -F arch=b64 -S creat -S open -S openat -S open_by_handle_at -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
+-a always,exit -F arch=b64 -S creat -S open -S openat -S open_by_handle_at -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
 
 #2.6.2.4.9 Ensure auditd Collects Information on the Use of Privileged Commands
+-a always,exit -F path=/usr/sbin/semanage -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged-priv_change
+-a always,exit -F path=/usr/sbin/setsebool -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged-priv_change
+-a always,exit -F path=/usr/bin/chcon -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged-priv_change
+-a always,exit -F path=/usr/sbin/restorecon -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged-priv_change
+-a always,exit -F path=/usr/bin/userhelper -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged
+-a always,exit -F path=/usr/bin/sudoedit -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged
+-a always,exit -F path=/usr/libexec/pt_chown -F perm=x -F auid>=1000 -F auid!=4294967295 -F key=privileged
 EOF
 # Find All privileged commands and monitor them
-for PROG in `find / -type f -perm -04000 -o -type f -perm -2000 2>/dev/null`; do
+for PROG in `find / -xdev -type f -perm -4000 -o -type f -perm -2000 2>/dev/null`; do
 	echo "-a always,exit -F path=$PROG -F perm=x -F auid>=1000 -F auid!=4294967295 -k privileged"  >> /etc/audit/rules.d/audit.rules
 done
 cat <<EOF >> /etc/audit/rules.d/audit.rules
@@ -335,6 +359,12 @@ cat <<EOF >> /etc/audit/rules.d/audit.rules
 -e 2
 EOF
 
+########################################
+# Fix cron.allow
+########################################
+echo "root" > /etc/cron.allow
+chmod 400 /etc/cron.allow
+chown root:root /etc/cron.allow
 
 ########################################
 # Make SELinux Configuration Immutable
@@ -349,13 +379,19 @@ ln -sf /dev/null /etc/systemd/system/ctrl-alt-del.target
 
 
 ########################################
-# Limit Root Login to Console
+# No Root Login to Console (use admin user)
 ########################################
-cat <<EOF > /etc/securetty
-console
-tty1
-EOF
+cat /dev/null > /etc/securetty
 
+
+########################################
+# SSSD Configuration
+########################################
+mkdir -p /etc/sssd
+cat <<EOF > /etc/sssd/sssd.conf
+[sssd]
+services = sudo, autofs, pam
+EOF
 
 ########################################
 # Disable Interactive Shell (Timeout)
@@ -363,8 +399,8 @@ EOF
 cat <<EOF > /etc/profile.d/autologout.sh
 #!/bin/sh
 TMOUT=900
-readonly TMOUT
 export TMOUT
+readonly TMOUT
 EOF
 cat <<EOF > /etc/profile.d/autologout.csh
 #!/bin/csh
@@ -373,8 +409,31 @@ set -r autologout
 EOF
 chown root:root /etc/profile.d/autologout.sh
 chown root:root /etc/profile.d/autologout.csh
-chmod 755 /etc/profile.d/autologout.sh
-chmod 755 /etc/profile.d/autologout.csh
+chmod 555 /etc/profile.d/autologout.sh
+chmod 555 /etc/profile.d/autologout.csh
+
+########################################
+# Set Shell UMASK Setting (027)
+########################################
+cat <<EOF > /etc/profile.d/umask.sh
+#!/bin/sh
+
+# Non-Privledged Users get 027
+# Privledged Users get 022
+if [[ \$EUID -ne 0 ]]; then
+	umask 027
+else
+	umask 022
+fi
+EOF
+cat <<EOF > /etc/profile.d/umask.csh
+#!/bin/csh
+umask 027
+EOF
+chown root:root /etc/profile.d/umask.sh
+chown root:root /etc/profile.d/umask.csh
+chmod 555 /etc/profile.d/umask.sh
+chmod 555 /etc/profile.d/umask.csh
 
 
 ########################################
@@ -390,8 +449,8 @@ alias vlock 'clear;vlock -a'
 EOF
 chown root:root /etc/profile.d/vlock-alias.sh
 chown root:root /etc/profile.d/vlock-alias.csh
-chmod 755 /etc/profile.d/vlock-alias.sh
-chmod 755 /etc/profile.d/vlock-alias.csh
+chmod 555 /etc/profile.d/vlock-alias.sh
+chmod 555 /etc/profile.d/vlock-alias.csh
 
 
 ########################################
@@ -408,23 +467,36 @@ echo -e "\n## Set timeout for authentiation (5 Minutes)\nDefaults:ALL timestamp_
 ########################################
 for DEVICE in $(/bin/lsblk | grep sr | awk '{ print $1 }'); do
 	mkdir -p /mnt/$DEVICE
-	echo -e "/dev/$DEVICE\t\t/mnt/$DEVICE\t\tiso9660\tdefaults,ro,noexec,noauto\t0 0" >> /etc/fstab
+	echo -e "/dev/$DEVICE\t\t/mnt/$DEVICE\t\tiso9660\tdefaults,ro,noexec,nosuid,nodev,noauto\t0 0" >> /etc/fstab
 done
 for DEVICE in $(cd /dev;ls *cd* *dvd*); do
 	mkdir -p /mnt/$DEVICE
-	echo -e "/dev/$DEVICE\t\t/mnt/$DEVICE\t\tiso9660\tdefaults,ro,noexec,noauto\t0 0" >> /etc/fstab
+	echo -e "/dev/$DEVICE\t\t/mnt/$DEVICE\t\tiso9660\tdefaults,ro,noexec,nosuid,nodev,noauto\t0 0" >> /etc/fstab
 done
 
 
 ########################################
 # SSHD Hardening
 ########################################
+sed -i '/Ciphers.*/d' /etc/ssh/ssh*config
+sed -i '/MACs.*/d' /etc/ssh/ssh*config
+sed -i '/Protocol.*/d' /etc/ssh/sshd_config
 echo "Protocol 2" >> /etc/ssh/sshd_config
-echo "Ciphers aes128-ctr,aes192-ctr,aes256-ctr,aes128-cbc,3des-cbc,aes192-cbc,aes256-cbc" >> /etc/ssh/sshd_config
-echo "MACs hmac-sha2-512,hmac-sha2-256,hmac-sha1" >> /etc/ssh/sshd_config
+echo "Ciphers aes128-ctr,aes192-ctr,aes256-ctr" >> /etc/ssh/ssh_config
+echo "Ciphers aes128-ctr,aes192-ctr,aes256-ctr" >> /etc/ssh/sshd_config
+echo "MACs hmac-sha2-512,hmac-sha2-256" >> /etc/ssh/ssh_config
+echo "MACs hmac-sha2-512,hmac-sha2-256" >> /etc/ssh/sshd_config
+echo "PrintLastLog yes" >> /etc/ssh/sshd_config
 echo "AllowGroups sshusers" >> /etc/ssh/sshd_config
 echo "MaxAuthTries 3" >> /etc/ssh/sshd_config
 echo "Banner /etc/issue" >> /etc/ssh/sshd_config
+echo "RhostsRSAAuthentication no" >> /etc/ssh/sshd_config
+echo "GSSAPIAuthentication no" >> /etc/ssh/sshd_config
+echo "KerberosAuthentication no" >> /etc/ssh/sshd_config
+echo "IgnoreUserKnownHosts yes" >> /etc/ssh/sshd_config
+echo "StrictModes yes" >> /etc/ssh/sshd_config
+echo "UsePrivilegeSeparation yes" >> /etc/ssh/sshd_config
+echo "Compression delayed" >> /etc/ssh/sshd_config
 if [ $(grep -c sshusers /etc/group) -eq 0 ]; then
 	/usr/sbin/groupadd sshusers &> /dev/null
 fi
@@ -502,7 +574,15 @@ if [ $(grep " \/var " ${FSTAB} | grep -c "nodev") -eq 0 ]; then
 	MNT_OPTS=$(grep " \/var " ${FSTAB} | awk '{print $4}')
 	${SED} -i "s/\( \/var.*${MNT_OPTS}\)/\1,nodev,nosuid/" ${FSTAB}
 fi
-
+if [ $(grep " \/var\/www " ${FSTAB} | grep -c "nodev") -eq 0 ]; then
+	MNT_OPTS=$(grep " \/var\/wwww " ${FSTAB} | awk '{print $4}')
+	${SED} -i "s/\( \/var\/www.*${MNT_OPTS}\)/\1,nodev,nosuid/" ${FSTAB}
+fi
+if [ $(grep " \/opt " ${FSTAB} | grep -c "nodev") -eq 0 ]; then
+	MNT_OPTS=$(grep " \/opt " ${FSTAB} | awk '{print $4}')
+	${SED} -i "s/\( \/opt.*${MNT_OPTS}\)/\1,nodev,nosuid/" ${FSTAB}
+fi
+echo -e "tmpfs\t\t\t/dev/shm\t\ttmpfs\tnoexec,nosuid,nodev\t\t0 0" >> /etc/fstab
 
 ########################################
 # File Ownership 
@@ -517,26 +597,6 @@ find / -nogroup -print | xargs chown :root
 EOF
 chown root:root /etc/cron.daily/unowned_files
 chmod 0700 /etc/cron.daily/unowned_files
-
-
-########################################
-# AIDE Initialization
-########################################
-if [ ! -e /var/lib/aide/aide.db.gz ]; then
-	echo "Initializing AIDE database, this step may take quite a while!"
-	/usr/sbin/aide --init &> /dev/null
-	echo "AIDE database initialization complete."
-	cp /var/lib/aide/aide.db.new.gz /var/lib/aide/aide.db.gz
-fi
-cat <<EOF > /etc/cron.weekly/aide-report
-#!/bin/sh
-# Generate Weekly AIDE Report
-`/usr/sbin/aide --check > /var/log/aide/reports/$(hostname)-aide-report-$(date +%Y%m%d).txt`
-EOF
-chown root:root /etc/cron.weekly/aide-report
-chmod 555 /etc/cron.weekly/aide-report
-mkdir -p /var/log/aide/reports
-chmod 700 /var/log/aide/reports
 
 
 ########################################
@@ -616,6 +676,7 @@ clock-format="12h"
 
 [org/gnome/desktop/screensaver]
 user-switch-enabled=false
+lock-enabled=true
 
 [org/gnome/desktop/session]
 idle-delay=900
@@ -641,6 +702,7 @@ EOF
 /org/gnome/desktop/privacy/remove-old-trash-files
 /org/gnome/desktop/privacy/old-files-age
 /org/gnome/desktop/screensaver/user-switch-enabled
+/org/gnome/desktop/screensaver/lock-enabled
 /org/gnome/desktop/session/idle-delay
 /org/gnome/desktop/thumbnailers/disable-all
 /org/gnome/nm-applet/disable-wifi-create
@@ -674,6 +736,7 @@ clock-format="12h"
 
 [org.gnome.desktop.screensaver]
 user-switch-enabled=false
+lock-enabled=true
 
 [org.gnome.desktop.session]
 idle-delay=900
@@ -684,14 +747,72 @@ disable-all=true
 [org.gnome.nm-applet]
 disable-wifi-create=true
 EOF
+
+	cat << EOF > /etc/gdm/custom.conf
+# GDM configuration storage
+
+[daemon]
+AutomaticLoginEnable=false
+TimedLoginEnable=false
+
+[security]
+
+[xdmcp]
+
+[greeter]
+
+[chooser]
+
+[debug]
+
+EOF
 	cp /etc/dconf/db/gdm.d/locks/99-gnome-hardening /etc/dconf/db/local.d/locks/99-gnome-hardening
  	/bin/glib-compile-schemas /usr/share/glib-2.0/schemas/
 	/bin/dconf update
 fi
 
+########################################
+# Kernel - Randomize Memory Space
+# CCE-27127-0, SC-30(2), 1.6.1
+########################################
+echo "kernel.randomize_va_space = 2" >> /etc/sysctl.conf
+
+########################################
+# Kernel - Accept Source Routed Packets
+# AC-4, 366, SRG-OS-000480-GPOS-00227
+########################################
+echo "net.ipv6.conf.all.accept_source_route = 0" >> /etc/sysctl.conf
+
+#######################################
+# Kernel - Disable Redirects
+#######################################
+echo "net.ipv4.conf.default.accept_redirects = 0" >> /etc/sysctl.conf
+echo "net.ipv4.conf.all.accept_redirects = 0" >> /etc/sysctl.conf
+
+#######################################
+# Kernel - Disable ICMP Broadcasts
+#######################################
+echo "net.ipv4.icmp_echo_ignore_broadcasts = 1" >> /etc/sysctl.conf
+
+#######################################
+# Kernel - Disable Syncookies
+#######################################
+echo "net.ipv4.tcp_syncookies = 1" >> /etc/sysctl.conf
+
+#######################################
+# Kernel - Disable TCP Timestamps
+#######################################
+echo "net.ipv4.tcp_timestamps = 0" >> /etc/sysctl.conf
 
 ########################################
 # Disable SystemD Date Service 
 # Use (chrony or ntpd)
 ########################################
 timedatectl set-ntp false
+
+######################################## 
+# Disable Kernel Dump Service 
+######################################## 
+systemctl disable kdump.service 
+systemctl mask kdump.service
+

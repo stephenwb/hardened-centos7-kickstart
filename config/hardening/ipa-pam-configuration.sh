@@ -4,8 +4,8 @@
 #
 # Script: ipa-pam-configuration.sh (system-hardening)
 # Description: RHEL 7 Hardening Supplemental to SSG, configures PAM with sssd if system is registered with IdM.
-# License: GPLv2
-# Copyright: Frank Caviggia, 2016
+# License: Apache License, Version 2.0
+# Copyright: Frank Caviggia, 2018
 # Author: Frank Caviggia <fcaviggia (at) gmail.com>
 
 # Backup originial configuration
@@ -17,6 +17,7 @@ if [ ! -e /etc/pam.d/password-auth-local.orig ]; then
 fi
 
 # Deploy Configuruation
+chattr -i /etc/pam.d/system-auth-local
 cat <<EOF > /etc/pam.d/system-auth-local
 #%PAM-1.0
 auth required pam_env.so
@@ -38,7 +39,7 @@ account [default=bad success=ok user_unknown=ignore] pam_sss.so
 account required pam_permit.so
 
 # Password Quality now set in /etc/security/pwquality.conf
-password requried pam_pwqaulity.so retry=3
+password required pam_pwquality.so retry=3
 password sufficient pam_unix.so sha512 shadow try_first_pass use_authtok remember=24
 password sufficient pam_sss.so use_authtok
 password required pam_deny.so
@@ -53,8 +54,10 @@ session required pam_unix.so
 session optional pam_sss.so
 EOF
 ln -sf /etc/pam.d/system-auth-local /etc/pam.d/system-auth
+cp -f /etc/pam.d/system-auth-local /etc/pam.d/system-auth-ac
+chattr +i /etc/pam.d/system-auth-local
 
-
+chattr -i /etc/pam.d/password-auth-local
 cat <<EOF > /etc/pam.d/password-auth-local
 #%PAM-1.0
 auth required pam_env.so
@@ -76,7 +79,7 @@ account [default=bad success=ok user_unknown=ignore] pam_sss.so
 account required pam_permit.so
 
 # Password Quality now set in /etc/security/pwquality.conf
-password requried pam_pwqaulity.so retry=3
+password required pam_pwquality.so retry=3
 password sufficient pam_unix.so sha512 shadow try_first_pass use_authtok remember=24
 password sufficient pam_sss.so use_authtok
 password required pam_deny.so
@@ -91,5 +94,7 @@ session required pam_unix.so
 session optional pam_sss.so
 EOF
 ln -sf /etc/pam.d/password-auth-local /etc/pam.d/password-auth
+cp -f /etc/pam.d/password-auth-local /etc/pam.d/password-auth-ac
+chattr +i /etc/pam.d/password-auth-local
 
 exit 0

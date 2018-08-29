@@ -4,8 +4,8 @@
 #
 # Script: ovirt-preinstall.sh
 # Description: Losens Hardening settings temporarily to allow registration with Ovirt 3.x
-# License: GPLv2
-# Copyright: Frank Caviggia, 2016
+# License: Apache License, Version 2.0
+# Copyright: Frank Caviggia, 2018
 
 # Check for root user
 if [[ $EUID -ne 0 ]]; then
@@ -15,7 +15,7 @@ fi
 
 echo -e "\033[3m\033[1mOvirt Pre-Install Script\033[0m\033[0m"
 echo
-echo -e "\033[1mThis script losens hardening settings to allow RHEV-M to attach a system.\033[0m"
+echo -e "\033[1mThis script losens hardening settings to allow Ovirt Manager to attach a system.\033[0m"
 echo
 echo -ne "\033[1mDo you want to continue?\033[0m [y/n]: "
 while read a; do
@@ -41,5 +41,15 @@ mount -o remount,exec /tmp
 if [ $(grep -c "umask 0022" /root/.bashrc) -eq 0 ]; then
 	echo "umask 0022" >> /root/.bashrc
 fi
+
+# Fix Settings in /etc/yum.conf
+sed -i "s/repo_gpgcheck=1/repo_gpgcheck=0/g" /etc/yum.conf
+
+# Install vdsm and dependancies
+/bin/yum install vdsm -y
+
+# Configure firewall
+/root/iptables.sh --kvm
+systemctl restart iptables
 
 exit 0

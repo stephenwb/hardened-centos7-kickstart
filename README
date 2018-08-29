@@ -2,11 +2,11 @@
 # Hardened CentOS 7 DVD CREATOR
 #
 # This script was written by Frank Caviggia
-# Last update was 13 Nov 2015
+# Last update was 13 May 2017
 #
 # Author: Frank Caviggia (fcaviggia@gmail.com)
-# Copyright: Frank Caviggia, (c) 2016
-# License: GPLv2
+# Copyright: Frank Caviggia, (c) 2018
+# License: Apache License, Version 2.0
 # Description: Hardened Installation of CentOS 7
 ###############################################################################
 
@@ -14,8 +14,11 @@
 ABOUT
 =====
 
-Modifies a CentOS 7.2+ x86_64 DVD with a kickstart that will install a system 
-that is configured and hardened to meet government regluations.
+Modifies a CentOS 7.3+ (1611) (tested with CentOS-7-x86_64-DVD-1702-01.iso) 
+x86_64 DVD with a kickstart that will install a system  that is configured and hardened
+to meet government-level regulations.
+
+NOTE: ROOT ACCOUNT IS LOCKED WITH INSTALL USE 'admin' ACCOUNT WITH 'sudo' INSTEAD.
 
 The kickstart script involves the integration of the following projects 
 into a single installer:
@@ -37,6 +40,10 @@ createiso.sh - installation script to modify CentOS 7.2+ ISO image
 
 /config - Kickstarts, Python, and RPMs needed to modify image.
 
+	EFI/BOOT/
+	
+		grub.cfg - Menu Configuration for UEFI boot
+	
 	isolinux/
 
 		isolinux.cfg - Menu Configuration for Kickstart
@@ -58,18 +65,24 @@ createiso.sh - installation script to modify CentOS 7.2+ ISO image
 			Graphical Classification Banner (for GNOME Desktops User/
 			Developer Workstation Profiles)
 
-		suplemental.sh
+		supplemental.sh
 
 			Additional system lockdowns (FIPS 140-2 Kernel Mode, GNOME,
 			wheel group for root access, etc.)
 
-		ovirt-preinstall.sh
-		ovirt-postinstall.sh
+		ovirt-engine-install.sh
+		
+			Script to install and configure Ovirt Manager.
+		
+		ovirt-kvm-preinstall.sh
+		ovirt-kvm-postinstall.sh
 
-			Scripts to loosen settings temporarily to allow registration
-			of the system with RHEV-M by allowing root login and allowing
-			exec in /tmp. Run rhevm-postinstall.sh after system is added
-			into RHEV-M. Copied to /root after kickstart install
+			Scripts to install Ovirt-Attached KVM hypervisor. Script 
+			will loosen settings temporarily to allow registration
+			of the system with Ovirt Manager by allowing root login and 
+			allowing exec in /tmp. Run rhevm-postinstall.sh after system 
+			is added into Ovirt Manager. Copied to /root after kickstart
+			install
 
 		iptables.sh (use with KVM and Ovirt hosts, uses iptables/ebtables)
 
@@ -84,9 +97,13 @@ createiso.sh - installation script to modify CentOS 7.2+ ISO image
 			overwriting the pam.d configurations. Copied to /root
 			after kickstart installation
 			
-		scap-security-guide-0.1.28.1.201602091119GITb9b262b-1.el7.centos.noarch.rpm
+		scap-security-guide-*.el7.noarch.rpm
 		
 			SCAP Security Guide for implimenting DISA STIG profile on CentOS and Firefox.
+		
+		usbguard-*.x86_64.rpm
+		
+			USB guard will control what USB devices are accessible by the system.
 
 HARDENING INFORMATION
 =====================
@@ -94,10 +111,10 @@ HARDENING INFORMATION
 Here is some additional information added by the supplemental hardening script
 in addition to the SSG:
 
-1. The kernel option for  FIPS 140-2 mode is contained on the kickstart menu
+1. The kernel option for FIPS 140-2 mode is contained on the kickstart menu
 
 2. Shell timeout (bash/csh) is 15 minutes of inactivity, vlock will lock CLI
-   console
+   console (scripts are located under /etc/profile.d/autologout.{sh,csh})
 
 3. The 'wheel' group is required for privileged users (beyond root) to run 
    `su -` or `sudo -i` commands, sudo timeout is 5 minutes
@@ -105,13 +122,16 @@ in addition to the SSG:
 4. The 'sshusers' group is required for SSH/SFTP access, other users are 
    limited to console access without this group
    
-5. Additional Software such as McAfee EPo/HBSS may be required meet site 
+5. Additional software such as McAfee EPo/HBSS may be required meet site 
    policy
 
-6. Configure NTP (/etc/chrony.conf) and rsyslog logging to remote server 
-   (/etc/rsyslog.conf)
+6. Configure PTP or NTP for time synchronization (/etc/chrony.conf or /etc/ntp.conf)
+
+7. Configure rsyslog to send logs to a centralized log monitoring. (/etc/rsyslog.conf)
 
 8. Create users:
+
+	NOTE: The root user is locked now - use 'admin' user account with sudo instead of root.
 
         Local Console Access Only (Unprivileged)
           
@@ -124,10 +144,7 @@ in addition to the SSG:
         System Administrator (SA) (Privileged User)
                
                # useradd -m -c "System Administrator" -G sshusers,wheel admin
-               
-        (Optional) After adding SAs to the system, lock the root account:
-          
-               # passwd -l root
+       	
 
 9. Wireless  is disabled in a number of ways with Network Manager including:
 

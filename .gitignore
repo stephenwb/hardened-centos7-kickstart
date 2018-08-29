@@ -1,0 +1,4 @@
+*.iso
+*.info.txt
+hardened-tmp/
+original-mnt/

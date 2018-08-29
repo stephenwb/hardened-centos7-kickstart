@@ -2,13 +2,13 @@
 # Graphical Kickstart Script
 #
 # This script was written by Frank Caviggia
-# Last update was 07 February 2016
+# Last update was 13 May 2017
 #
 # Author: Frank Caviggia (fcaviggia@gmail.com)
-# Copyright: Frank Caviggia, (C) 2016
-# License: GPLv2
+# Copyright: Frank Caviggia, (C) 2018
+# License: Apache License, Version 2.0
 
-import os,sys,re,crypt,random
+import os,sys,re,crypt,random,pyudev
 try:
 	os.environ['DISPLAY']
 	import pygtk,gtk
@@ -26,7 +26,7 @@ class Verification:
 		else:
 			return False
 
-	# Check for vaild Unix username
+	# Check for valid Unix username
 	def check_username(self,username):
 		pattern = re.compile(r"^\w{5,255}$",re.VERBOSE)
 		if re.match(pattern,username):
@@ -34,7 +34,7 @@ class Verification:
 		else:
 			return False
 
-	# Check for vaild Unix UID
+	# Check for valid Unix UID
 	def check_uid(self,uid):
 		pattern = re.compile(r"^\d{1,10}$",re.VERBOSE)
 		if re.match(pattern,uid):
@@ -42,7 +42,7 @@ class Verification:
 		else:
 			return False
 
-	# Check for vaild IP address
+	# Check for valid IP address
 	def check_ip(self,ip):
 		pattern = re.compile(r"\b(([01]?\d?\d|2[0-4]\d|25[0-5])\.){3}([01]?\d?\d|2[0-4]\d|25[0-5])\b",re.VERBOSE)
 		if re.match(pattern,ip) and ip != "0.0.0.0":
@@ -50,7 +50,7 @@ class Verification:
 		else:
 			return False
 
-        # Check for vaild system hostanme
+        # Check for valid system hostname
         def check_hostname(self,hostname):
                 pattern = re.compile(r"^[a-zA-Z0-9\-\.]{1,100}$",re.VERBOSE)
                 if re.match(pattern,hostname):
@@ -63,7 +63,7 @@ class Verification:
 class Display_Menu:
         def __init__(self):
 
-		# Initalize Additional Configuration Files
+		# Initialize Additional Configuration Files
 		f = open('/tmp/hardening-post','w')
 		f.write('')
 		f.close()
@@ -79,7 +79,7 @@ class Display_Menu:
 
                 # Create Main Window
                 self.window = gtk.Window()
-                self.window.set_title("CentOS 7 - Hardend Kickstart Installation")
+                self.window.set_title("CentOS 7 - Hardened Kickstart Installation")
                 self.window.set_position(gtk.WIN_POS_CENTER)
 		self.window.connect("delete_event",gtk.main_quit)
 		self.display = gtk.gdk.display_get_default()
@@ -112,7 +112,7 @@ class Display_Menu:
                 # Creates Information Message
                 self.label = gtk.Label('This DVD installs CentOS 7 in a hardened configuration.')
                 self.vbox.add(self.label)
-		self.label = gtk.Label('CentOS 7 (SSG DVD Installer v.0.8b)')
+		self.label = gtk.Label('CentOS 7 (SSG DVD Installer v.1.0)')
                 self.vbox.add(self.label)
 
                 # Blank Label
@@ -121,7 +121,7 @@ class Display_Menu:
 
 		# System Configuration
                 self.system = gtk.HBox()
-                self.label = gtk.Label("   Hostame: ")
+                self.label = gtk.Label("   Hostname: ")
                 self.system.pack_start(self.label,False,True, 0)
                 self.hostname = gtk.Entry(100)
 		self.hostname.set_size_request(225,-1)
@@ -138,7 +138,7 @@ class Display_Menu:
                 self.system_profile = gtk.combo_box_new_text()
 		self.system_profile.append_text("Minimal Installation")
 		self.system_profile.append_text("IPA Authentication Server")
-		self.system_profile.append_text("Ovirt-Attached KVM Server")
+		self.system_profile.append_text("Ovirt/KVM Server")
 		self.system_profile.append_text("User Workstation")
 		self.system_profile.append_text("Standalone KVM Server")
 		self.system_profile.set_active(0)
@@ -280,8 +280,21 @@ class Display_Menu:
 		self.fips_kernel.set_active(True)
 		self.encrypt.pack_start(self.fips_kernel, False, True, 0)
 
+		self.nousb_kernel = gtk.CheckButton('Disable USB (nousb)')
+		self.nousb_kernel.set_active(False)
+		self.encrypt.pack_start(self.nousb_kernel, False, True, 0)
+
+		self.lock_root = gtk.CheckButton('Lock root')
+		self.lock_root.set_active(True)
+		self.encrypt.pack_start(self.lock_root, False, True, 0)
+
 		self.vbox.add(self.encrypt)
 
+		# By default, do not disable USB support if a USB keyboard is present
+		if any([device.parent.device_type==u'usb_interface' for device in pyudev.Context().list_devices(subsystem='input') if device.get('ID_INPUT_KEYBOARD', None)]):
+			self.nousb_kernel.set_active(False)
+		else:
+			self.nousb_kernel.set_active(True)
 
 		# Minimal Installation Warning
 		if self.disk_total < 8:
@@ -414,7 +427,7 @@ class Display_Menu:
 
 		## STOCK CONFIGURATIONS (Minimal Install)
 		# Default SSG Profile (DISA STIG)
-		self.profile='xccdf_org.ssgproject.content_profile_stig-rhel7-server-upstream'
+		self.profile='xccdf_org.ssgproject.content_profile_stig-rhel7-disa'
 		# Post Configuration (nochroot)
 		f = open('/tmp/hardening-post-nochroot','w')
 		f.write('')
@@ -441,7 +454,7 @@ class Display_Menu:
 
 	# Shows Help for Main Install
         def show_help_main(self,args):
-		self.help_text = ("<b>Install Help</b>\n\n- All LVM partitions need to take less than or equal to 100% of the LVM Volume Group.\n\n- Pressing OK prompts for a password to encrypt Disk (LUKS), GRUB, and Root password.\n\n- The sshusers group controls remote access, wheel group is for root users, and isso group is for limited root with auditing permissions.\n\n- To access root remotely via ssh you need to create a user and add them to the wheel and sshusers groups.\n\n- Minimum password length is 15 characters, using a strong password is recommended.\n")
+		self.help_text = ("<b>Install Help</b>\n\n- All LVM partitions need to take less than or equal to 100% of the LVM Volume Group.\n\n- Pressing OK prompts for a password to encrypt Disk (LUKS), GRUB, and admin password.\n\n- The sshusers group controls remote access, wheel group is for root users, and isso group is for limited root with auditing permissions.\n\n- To access root remotely via ssh you need to create a user and add them to the wheel and sshusers groups.\n\n- Minimum password length is 15 characters, using a strong password is recommended.\n")
                 self.MessageBox(self.window,self.help_text,gtk.MESSAGE_INFO)
 
 
@@ -464,10 +477,10 @@ class Display_Menu:
 
 		# Define SSG Security Profile
 		if int(self.system_security.get_active()) == 0:
-			self.profile='xccdf_org.ssgproject.content_profile_stig-rhel7-server-upstream'
+			self.profile='xccdf_org.ssgproject.content_profile_stig-rhel7-disa'
 
 		################################################################################################################
-		# Minimal (Defualts to Kickstart)
+		# Minimal (Defaults to Kickstart)
 		################################################################################################################
 		if int(self.system_profile.get_active()) == 0:
 			# Partitioning
@@ -543,14 +556,14 @@ class Display_Menu:
 			f.close()
 			
 		################################################################################################################
-		# RHEV-Attached KVM Server
+		# Ovirt KVM Server
 		################################################################################################################
 		if int(self.system_profile.get_active()) == 2:
-			# WARNING - HARDENDING SCRIPT NOT RUN!
- 			self.MessageBox(self.window,"<b>Warning:</b> Please run the following script before adding system RHEV-M:\n\n   # /root/rhevm-preinstall.sh\n\nAfter adding the system to RHEV-M, run the following:\n\n   # /root/rhevm-postinstall.sh",gtk.MESSAGE_WARNING)
+			# WARNING - HARDENING SCRIPT NOT RUN!
+ 			self.MessageBox(self.window,"<b>Warning:</b>\n\nTo configure an Ovirt Manager run the following script:\n\n   # /root/ovirt-engine-install.sh\n\n\n\nTo configure a KVM hypervisor to attach to Ovirt Manager:\n\n   # /root/ovirt-kvm-preinstall.sh\n\nAfter adding the system to to Ovirt Manager, run the following:\n\n   # /root/ovirt-kvm-postinstall.sh",gtk.MESSAGE_WARNING)
 			# Partitioning
 			if self.disk_total < 60:
-				self.MessageBox(self.window,"<b>Recommended minimum of 60Gb disk space for a RHEV-Attached KVM Server Install!</b>\n\n You have "+str(self.disk_total)+"Gb available.",gtk.MESSAGE_WARNING)
+				self.MessageBox(self.window,"<b>Recommended minimum of 60Gb disk space for a Ovirt-Attached KVM Server Install!</b>\n\n You have "+str(self.disk_total)+"Gb available.",gtk.MESSAGE_WARNING)
 			self.opt_partition.set_value(0)
 			self.www_partition.set_value(0)
 			self.swap_partition.set_value(5)
@@ -566,17 +579,23 @@ class Display_Menu:
 			f.close()
 			# Post Configuration
 			f = open('/tmp/hardening-post','w')
+			# Ovirt Scripts for Pre-Install/Post-Install
+			f.write('cp /root/hardening/ovirt*.sh /root/\n')
+			f.write('rpm --import /root/hardening/RPM-GPG-ovirt-v2\n')
+			f.write('yum localinstall -y /root/hardening/ovirt-release*.rpm\n')
 			# Run Hardening Script
 			f.write('/usr/bin/oscap xccdf eval --profile '+str(self.profile)+' --remediate --results /root/`hostname`-ssg-results.xml /usr/share/xml/scap/ssg/content/ssg-centos7-ds.xml\n')
-			# RHEV Scripts for Pre-Install/Post-Install
-			f.write('cp /root/hardening/rhevm*.sh /root/\n')
 			# Firewall Configuration
 			f.write('cp /root/hardening/iptables.sh /root/\n')
-			f.write('/root/iptables.sh --kvm\n')
+			f.write('/root/iptables.sh\n')
 			f.write('systemctl mask firewalld\n')
 			f.write('systemctl stop firewalld\n')
 			f.write('systemctl enable iptables\n')
+			f.write('systemctl enable ip6tables\n')
+			f.write('systemctl enable ebtables\n')
 			f.write('systemctl start iptables\n')
+			f.write('systemctl start ip6tables\n')
+			f.write('systemctl start ebtables\n')
 			# Runlevel Configuration
 			f.write('systemctl set-default multi-user.target\n')
 			f.close()
@@ -587,6 +606,7 @@ class Display_Menu:
 			f.write('iptables\n')
 			f.write('iptables-services\n')
 			f.write('libvirt\n')
+			f.write('pciutils\n')
 			f.close()
 
 
@@ -626,10 +646,10 @@ class Display_Menu:
 			f.write('@x-window-system\n')
 			f.write('liberation*\n')
 			f.write('dejavu*\n')
+			f.write('firewall-config\n')
 			f.write('gnome-classic-session\n')
 			f.write('gnome-terminal\n')
 			f.write('gnome-calculator\n')
-			f.write('nautilus-open-terminal\n')
 			f.write('control-center\n')
 			f.write('pulseaudio-module-x11\n')
 			f.write('alsa-plugins-pulseaudio\n')
@@ -690,7 +710,6 @@ class Display_Menu:
 			f.write('gnome-classic-session\n')
 			f.write('gnome-terminal\n')
 			f.write('gnome-calculator\n')
-			f.write('nautilus-open-terminal\n')
 			f.write('control-center\n')
 			f.write('pulseaudio-module-x11\n')
 			f.write('alsa-plugins-pulseaudio\n')
@@ -921,7 +940,27 @@ class Display_Menu:
 			# Enable FIPS 140-2 mode in Kernel
 			f.write('\n/root/hardening/fips-kernel-mode.sh\n')
 			f.close()
+                else:
+			f = open('/tmp/hardening-post','a')
+			# Disable FIPS 140-2 mode in Kernel
+			f.write('\ngrubby --update-kernel=ALL --remove-args="fips=1"\n')
+			f.write('\n/usr/bin/sed -i "s/ fips=1//" /etc/default/grub\n')
+			f.close()
 
+		# Disable USB (nousb kernel option)
+		if self.nousb_kernel.get_active() == True:
+			f = open('/tmp/hardening-post','a')
+			# Enable nousb mode in Kernel
+			f.write('\ngrubby --update-kernel=ALL --args="nousb"\n')
+			f.write('\n/usr/bin/sed -i "s/ quiet/quiet nousb/" /etc/default/grub\n')
+			f.close()
+		else:
+			f = open('/tmp/hardening-post','a')
+			# Disable nousb mode in Kernel
+			f.write('\ngrubby --update-kernel=ALL --remove-args="nousb"\n')
+			f.write('\n/usr/bin/sed -i "s/ nousb//" /etc/default/grub\n')
+			f.close()
+			
 		# Set system password
 		while True:
 			self.get_password(self.window)
@@ -935,7 +974,7 @@ class Display_Menu:
 					self.MessageBox(self.window,"<b>Password too short! 15 Characters Required.</b>",gtk.MESSAGE_ERROR)
 			else:
 				self.MessageBox(self.window,"<b>Passwords Don't Match!</b>",gtk.MESSAGE_ERROR)
-			
+
                 self.error = 0
 
 		if self.verify.check_hostname(self.hostname.get_text()) == False:
@@ -974,38 +1013,41 @@ class Display_Menu:
 			self.salt = '$6$'+self.salt
 			self.password = crypt.crypt(self.passwd,self.salt)
 
+                        # Quote Password
+                        self.quoted_password = '"%s"' % self.passwd.replace('\\','\\\\').replace('"','\\"')
+
 			# Write Classification Banner Settings
-			if int(self.system_profile.get_active()) == 1 or int(self.system_profile.get_active()) == 2:
-				f = open('/tmp/classification-banner','w')
-				f.write('message = "'+str(self.system_classification.get_active_text())+'"\n')
-				if int(self.system_classification.get_active()) == 0 or int(self.system_classification.get_active()) == 1:
-					f.write('fgcolor = "#000000"\n')
-					f.write('bgcolor = "#00CC00"\n')
-				elif int(self.system_classification.get_active()) == 2:
-					f.write('fgcolor = "#000000"\n')
-					f.write('bgcolor = "#33FFFF"\n')
-				elif int(self.system_classification.get_active()) == 3:
-					f.write('fgcolor = "#FFFFFF"\n')
-					f.write('bgcolor = "#FF0000"\n')
-				elif int(self.system_classification.get_active()) == 4:
-					f.write('fgcolor = "#FFFFFF"\n')
-					f.write('bgcolor = "#FF9900"\n')
-				elif int(self.system_classification.get_active()) == 5:
-					f.write('fgcolor = "#000000"\n')
-					f.write('bgcolor = "#FFFF00"\n')
-				elif int(self.system_classification.get_active()) == 6:
-					f.write('fgcolor = "#000000"\n')
-					f.write('bgcolor = "#FFFF00"\n')
-				else:
-					f.write('fgcolor = "#000000"\n')
-					f.write('bgcolor = "#FFFFFF"\n')
-				f.close()
+			f = open('/tmp/classification-banner','w')
+			f.write('message = "'+str(self.system_classification.get_active_text())+'"\n')
+			if int(self.system_classification.get_active()) == 0 or int(self.system_classification.get_active()) == 1:
+				f.write('fgcolor = "#FFFFFF"\n')
+				f.write('bgcolor = "#007A33"\n')
+			elif int(self.system_classification.get_active()) == 2:
+				f.write('fgcolor = "#FFFFFF"\n')
+				f.write('bgcolor = "#0033A0"\n')
+			elif int(self.system_classification.get_active()) == 3:
+				f.write('fgcolor = "#FFFFFF"\n')
+				f.write('bgcolor = "#C8102E"\n')
+			elif int(self.system_classification.get_active()) == 4:
+				f.write('fgcolor = "#FFFFFF"\n')
+				f.write('bgcolor = "#FF671F"\n')
+			elif int(self.system_classification.get_active()) == 5:
+				f.write('fgcolor = "#FFFFF"\n')
+				f.write('bgcolor = "#F7EA48"\n')
+			elif int(self.system_classification.get_active()) == 6:
+				f.write('fgcolor = "#000000"\n')
+				f.write('bgcolor = "#F7EA48"\n')
+			else:
+				f.write('fgcolor = "#FFFFFF"\n')
+				f.write('bgcolor = "#007A33"\n')
+			f.close()
 
 			# Write Kickstart Configuration
 			f = open('/tmp/hardening','w')
-			f.write('network --hostname '+self.hostname.get_text()+'\n')
-			f.write('rootpw --iscrypted '+str(self.password)+'\n')
-			f.write('bootloader --location=mbr --driveorder='+str(self.data["INSTALL_DRIVES"])+' --append="crashkernel=auto rhgb quiet audit=1" --password='+str(self.a)+'\n')
+			f.write('network --hostname '+self.hostname.get_text()+' \n')
+			f.write('rootpw --iscrypted '+str(self.password)+(' --lock' if self.lock_root.get_active() == True else '')+'\n')
+                        f.write('bootloader --location=mbr --driveorder='+str(self.data["INSTALL_DRIVES"])+' --append="crashkernel=auto rhgb quiet audit=1" --password='+self.quoted_password+'\n')
+			f.write('user --name=admin --groups=wheel --password='+str(self.password)+' --iscrypted \n')
 			f.close()
 			f = open('/tmp/partitioning','w')
 			if self.data["IGNORE_DRIVES"] != "":
@@ -1013,22 +1055,24 @@ class Display_Menu:
 			f.write('zerombr\n')
 			f.write('clearpart --all --drives='+str(self.data["INSTALL_DRIVES"])+'\n')
 			if self.encrypt_disk.get_active() == True:
-				f.write('part pv.01 --grow --size=200 --encrypted --cipher=\'aes-xts-plain64\' --passphrase='+str(self.passwd)+'\n')
+				f.write('part pv.01 --grow --size=200 --encrypted --cipher=\'aes-xts-plain64\' --passphrase='+self.quoted_password+'\n')
 			else:
 				f.write('part pv.01 --grow --size=200\n')
 			f.write('part /boot --fstype=xfs --size=1024\n')
 			f.write('volgroup vg1 --pesize=4096 pv.01\n')
-			f.write('logvol / --fstype=xfs --name=lv_root --vgname=vg1 --grow --percent='+str(self.root_partition.get_value_as_int())+'\n')
-			f.write('logvol /home --fstype=xfs --name=lv_home --vgname=vg1 --grow --percent='+str(self.home_partition.get_value_as_int())+'\n')
-			f.write('logvol /tmp --fstype=xfs --name=lv_tmp --vgname=vg1 --grow --percent='+str(self.tmp_partition.get_value_as_int())+'\n')
-			f.write('logvol /var --fstype=xfs --name=lv_var --vgname=vg1 --grow --percent='+str(self.var_partition.get_value_as_int())+'\n')
-			f.write('logvol /var/log --fstype=xfs --name=lv_log --vgname=vg1 --grow --percent='+str(self.log_partition.get_value_as_int())+'\n')
-			f.write('logvol /var/log/audit --fstype=xfs --name=lv_audit --vgname=vg1 --grow --percent='+str(self.audit_partition.get_value_as_int())+'\n')
-			f.write('logvol swap --fstype=swap --name=lv_swap --vgname=vg1 --maxsize=4096 --grow --percent='+str(self.swap_partition.get_value_as_int())+'\n')
+			if os.path.isdir('/sys/firmware/efi'):
+				f.write('part /boot/efi --fstype=efi --size=200\n')
+			f.write('logvol / --fstype=xfs --name=lv_root --vgname=vg1 --percent='+str(self.root_partition.get_value_as_int())+'\n')
+			f.write('logvol /home --fstype=xfs --name=lv_home --vgname=vg1 --percent='+str(self.home_partition.get_value_as_int())+'\n')
+			f.write('logvol /tmp --fstype=xfs --name=lv_tmp --vgname=vg1 --percent='+str(self.tmp_partition.get_value_as_int())+'\n')
+			f.write('logvol /var --fstype=xfs --name=lv_var --vgname=vg1 --percent='+str(self.var_partition.get_value_as_int())+'\n')
+			f.write('logvol /var/log --fstype=xfs --name=lv_log --vgname=vg1 --percent='+str(self.log_partition.get_value_as_int())+'\n')
+			f.write('logvol /var/log/audit --fstype=xfs --name=lv_audit --vgname=vg1 --percent='+str(self.audit_partition.get_value_as_int())+'\n')
+			f.write('logvol swap --fstype=swap --name=lv_swap --vgname=vg1 --maxsize=4096 --percent='+str(self.swap_partition.get_value_as_int())+'\n')
 			if self.opt_partition.get_value_as_int() >= 1:
-				f.write('logvol /opt --fstype=xfs --name=lv_opt --vgname=vg1 --grow --percent='+str(self.opt_partition.get_value_as_int())+'\n')
+				f.write('logvol /opt --fstype=xfs --name=lv_opt --vgname=vg1 --percent='+str(self.opt_partition.get_value_as_int())+'\n')
 			if self.www_partition.get_value_as_int() >= 1:
-				f.write('logvol /var/www --fstype=xfs --name=lv_www --vgname=vg1 --grow --percent='+str(self.www_partition.get_value_as_int())+'\n')
+				f.write('logvol /var/www --fstype=xfs --name=lv_www --vgname=vg1 --percent='+str(self.www_partition.get_value_as_int())+'\n')
 			f.close()
 			gtk.main_quit()
 
